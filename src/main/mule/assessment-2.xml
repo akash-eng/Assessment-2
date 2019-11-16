@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="0911f59e-451c-4b5f-87a9-6e7db4f8370b" >
+		<http:request-connection protocol="HTTPS" host="api.meteostat.net" port="443" />
+	</http:request-config>
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="d8b2e895-06a8-433f-a427-0b8f154a9ca6" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<flow name="RetrieveWeatherData" doc:id="2b3847e2-cc81-48ad-9cd8-24f066877bb8" >
+		<http:listener doc:name="Listener" doc:id="1f093b8c-5dd0-43f5-93e8-d757fbef1656" config-ref="HTTP_Listener_config" path="/getWeatherData"/>
+		<http:request method="GET" doc:name="Request" doc:id="cccffeb6-e850-4593-a01f-ea410fa5d97d" config-ref="HTTP_Request_configuration" path="/v1/history/daily">
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"start" : "2017-01-01",
+	"key" : "uFwmrhOW",
+	"end" : "2017-12-31",
+	"station" : "10637"
+}]]]></http:query-params>
+		</http:request>
+		<logger level="INFO" doc:name="Logger" doc:id="d6283f91-ad6c-4170-9bb4-3bea11850a7b" />
+	</flow>
+	<flow name="MaxTemperature" doc:id="57c3851b-2290-4f73-b97b-7f85131054b2" >
+		<http:listener doc:name="Listener" doc:id="f555efa0-f28a-44e5-86be-56eaad1573cd" config-ref="HTTP_Listener_config" path="/getMaxTemperature"/>
+		<ee:transform doc:name="Transform Message" doc:id="11773dc7-a296-4770-a11c-c1bb5acb7bf3" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	start: "2017-" ++ attributes.queryParams.month ++ "-01",
+	end: "2017-" ++ attributes.queryParams.month ++ "-31"
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="GET" doc:name="Request" doc:id="b0049b4a-ca62-4f5e-8f86-58ec734dbdf6" config-ref="HTTP_Request_configuration" path="/v1/history/daily" >
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"start" : payload.start,
+	"key" : "uFwmrhOW",
+	"end" : payload.end,
+	"station" : "10637"
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="67b23461-2892-41d0-9113-694c8c489af0" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var temp = payload.data map $.temperature_max
+
+---
+
+max(temp)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="37fcde52-534b-444c-84b8-fac0035f6213" message='#[payload]'/>
+	</flow>
+	<flow name="AveragePrecipitation" doc:id="7995f568-3440-4a54-bf15-8857ee54b618" >
+		<http:listener doc:name="Listener" doc:id="fa3b7d30-92f3-48ef-864d-d0f04b4b0b97" config-ref="HTTP_Listener_config" path="/getAvgPrecipitation" />
+		<ee:transform doc:name="Transform Message" doc:id="c495a6ad-0afe-49c0-b97c-ad204e357d18" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	start: "2017-" ++ attributes.queryParams.month ++ "-01",
+	end: "2017-" ++ attributes.queryParams.month ++ "-31"
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="GET" doc:name="Request" doc:id="35d4224a-2464-40bb-b19c-98ac2a605de7" config-ref="HTTP_Request_configuration" path="/v1/history/daily" >
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"start" : payload.start,
+	"key" : "uFwmrhOW",
+	"end" : payload.end,
+	"station" : "10637"
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="0eaa4bed-14f8-40d3-94a7-6c0d4fc99ac1" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var precipitation = payload.data map $.precipitation
+
+---
+
+avg(precipitation)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="d3ae48fd-aa6e-4d0d-8fb6-6e27a381f42c" message='#[payload]' />
+	</flow>
+	<flow name="MinimunTemperature" doc:id="f8a6ebb2-cc0a-4146-bc8a-e3a34541a7ae" >
+		<http:listener doc:name="Listener" doc:id="bfc23704-ec80-4d59-985d-8e734339cdfe" config-ref="HTTP_Listener_config" path="/getMinTemp" />
+		<http:request method="GET" doc:name="Request" doc:id="87ffe940-40a6-4108-96b9-6ef5a4ec270e" config-ref="HTTP_Request_configuration" path="/v1/history/daily" >
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"start" : "2017-01-01",
+	"key" : "uFwmrhOW",
+	"end" : "2017-12-31",
+	"station" : "10637"
+}]]]></http:query-params>
+		</http:request>
+		<set-variable value="" doc:name="Set Variable" doc:id="67274dcc-3b33-49d5-9c81-2dc64625058d" variableName="minTemp"/>
+		<foreach doc:name="For Each" doc:id="4b5cff60-b01a-4bb1-b714-d63776763cc2" batchSize="7" collection="#[payload.data]">
+			<ee:transform doc:name="Copy_of_Copy_of_Transform Message" doc:id="f3e9ae26-b55b-47f8-bf84-33f182631540">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var minTemp = payload map $.temperature_min
+---
+min(minTemp)
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			<logger level="INFO" doc:name="Logger" doc:id="872b0ca8-6f4c-436d-aec3-6adfb1c266d6" message="#[payload]" />
+		</foreach>
+	</flow>
+</mule>
